@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+*.env
+server/.env
+
+# Temporary & Lock Files
+~$*.docx
+*.tmp
+*.log
+npm-debug.log*
+
+# System & OS Files
+.DS_Store
+Thumbs.db
+
+# IDE Files
+.vscode/
+.idea/

@@ -1,0 +1,722 @@
+openapi: 3.0.0
+info:
+  title: BloodBridge API Documentation
+  version: 1.0.0
+  description: >
+    Interactive API testing dashboard for BloodBridge — Dynamic Emergency Blood Broadcast & Coordination Network.
+    Features: targeted blood group broadcasts, one-time location confirmation (zero continuous GPS tracking),
+    road distance & ETA calculation, atomic backup responder pools, and persistent in-app chat.
+servers:
+  - url: http://localhost:5000
+    description: Local Development Server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter your JWT Bearer token obtained from POST /api/auth/login.
+
+  schemas:
+    # ---------------- AUTH & USER SCHEMAS ----------------
+    RegisterPayload:
+      type: object
+      required:
+        - fullName
+        - phone
+        - password
+        - bloodGroup
+      properties:
+        fullName:
+          type: string
+          minLength: 2
+          maxLength: 80
+          example: Aarav Sharma
+          description: User's full name
+        phone:
+          type: string
+          minLength: 10
+          maxLength: 16
+          example: "+919876543210"
+          description: Unique mobile phone number (supports international format)
+        email:
+          type: string
+          format: email
+          example: aarav@example.com
+          description: Optional email address
+        password:
+          type: string
+          minLength: 6
+          maxLength: 128
+          example: SecretPassword123
+          description: Account password (minimum 6 characters)
+        bloodGroup:
+          type: string
+          enum: [O-, O+, A-, A+, B-, B+, AB-, AB+]
+          example: O+
+          description: User's blood group (no rigid static location required at registration)
+
+    LoginPayload:
+      type: object
+      required:
+        - phone
+        - password
+      properties:
+        phone:
+          type: string
+          example: "+919876543210"
+        password:
+          type: string
+          example: SecretPassword123
+
+    ReadinessPayload:
+      type: object
+      properties:
+        isAvailableToDonate:
+          type: boolean
+          example: true
+          description: Toggle whether user is ready to receive emergency alerts
+        lastDonatedAt:
+          type: string
+          format: date-time
+          example: "2026-01-15T00:00:00.000Z"
+          description: Date of last donation to enforce 90-day cooldown
+        fcmToken:
+          type: string
+          example: dK8fJ9_firebase_push_token_here
+          description: Optional Firebase device push token
+
+    UserResponse:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 65f1a2b3c4d5e6f7a8b9c0d1
+        fullName:
+          type: string
+          example: Aarav Sharma
+        phone:
+          type: string
+          example: "+919876543210"
+        email:
+          type: string
+          example: aarav@example.com
+        bloodGroup:
+          type: string
+          example: O+
+        isAvailableToDonate:
+          type: boolean
+          example: true
+        lastDonatedAt:
+          type: string
+          nullable: true
+          example: null
+        totalDonations:
+          type: number
+          example: 0
+
+    RegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: User registered successfully. Please login to continue.
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    # ---------------- EMERGENCY REQUEST SCHEMAS ----------------
+    CreateRequestPayload:
+      type: object
+      required:
+        - patientName
+        - bloodGroup
+        - hospitalName
+        - hospitalAddress
+        - hospitalLat
+        - hospitalLng
+      properties:
+        patientName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Rahul Verma
+        bloodGroup:
+          type: string
+          enum: [O-, O+, A-, A+, B-, B+, AB-, AB+]
+          example: B+
+        unitsNeeded:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 1
+          example: 2
+        urgencyLevel:
+          type: string
+          enum: [CRITICAL, URGENT, SCHEDULED]
+          default: CRITICAL
+          example: CRITICAL
+        hospitalName:
+          type: string
+          minLength: 2
+          maxLength: 150
+          example: Apollo Emergency Hospital
+        hospitalAddress:
+          type: string
+          minLength: 3
+          maxLength: 250
+          example: 154 Bannerghatta Main Rd, Bangalore
+        hospitalLat:
+          type: number
+          minimum: -90
+          maximum: 90
+          example: 12.8954
+          description: Hospital latitude coordinate
+        hospitalLng:
+          type: number
+          minimum: -180
+          maximum: 180
+          example: 77.5982
+          description: Hospital longitude coordinate
+        expiresInHours:
+          type: number
+          minimum: 1
+          maximum: 72
+          default: 12
+          example: 12
+
+    BloodRequestResponse:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 65f2c4e5f6a7b8c9d0e1f2a3
+        requesterId:
+          type: string
+          example: 65f1a2b3c4d5e6f7a8b9c0d1
+        patientName:
+          type: string
+          example: Rahul Verma
+        bloodGroup:
+          type: string
+          example: B+
+        unitsNeeded:
+          type: integer
+          example: 2
+        urgencyLevel:
+          type: string
+          example: CRITICAL
+        hospitalName:
+          type: string
+          example: Apollo Emergency Hospital
+        hospitalAddress:
+          type: string
+          example: 154 Bannerghatta Main Rd, Bangalore
+        hospitalLat:
+          type: number
+          example: 12.8954
+        hospitalLng:
+          type: number
+          example: 77.5982
+        status:
+          type: string
+          enum: [BROADCASTING, RESPONDERS_POOLING, FULFILLED, CANCELLED, EXPIRED]
+          example: BROADCASTING
+        targetPoolSize:
+          type: integer
+          example: 5
+        expiresAt:
+          type: string
+          format: date-time
+
+    # ---------------- RESPONDER POOL SCHEMAS ----------------
+    RespondPayload:
+      type: object
+      required:
+        - lat
+        - lng
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+          example: 12.9124
+          description: One-time current latitude captured upon tapping Confirm (No continuous GPS)
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+          example: 77.6045
+          description: One-time current longitude captured upon tapping Confirm (No continuous GPS)
+
+    UpdateResponderStatusPayload:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [EN_ROUTE, ARRIVED, DONATED, WITHDRAWN]
+          example: EN_ROUTE
+          description: Arrival milestone status. Withdrawing auto-promotes the best backup responder.
+
+    UpdateRequestStatusPayload:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [FULFILLED, CANCELLED]
+          example: FULFILLED
+
+    ResponderItem:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 65f3a1b2c3d4e5f6a7b8c9d0
+        status:
+          type: string
+          enum: [CONFIRMED_PRIMARY, CONFIRMED_BACKUP, EN_ROUTE, ARRIVED, DONATED, WITHDRAWN]
+          example: CONFIRMED_PRIMARY
+        distanceMeters:
+          type: number
+          example: 2800
+          description: Driving distance calculated via OSRM
+        etaSeconds:
+          type: number
+          example: 540
+          description: Estimated road arrival time in seconds (e.g. 9 mins)
+        poolRank:
+          type: integer
+          example: 1
+        responder:
+          type: object
+          properties:
+            _id: { type: string, example: 65f1a2b3c4d5e6f7a8b9c0d2 }
+            fullName: { type: string, example: Vikram Singh }
+            phone: { type: string, example: "+919876543202" }
+            bloodGroup: { type: string, example: B+ }
+
+    # ---------------- CHAT SCHEMAS ----------------
+    SendMessagePayload:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          example: I am on my way, currently near the main gate.
+
+    ChatMessageResponse:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 65f4c1e2f3a4b5c6d7e8f9a0
+        requestId:
+          type: string
+          example: 65f2c4e5f6a7b8c9d0e1f2a3
+        senderId:
+          type: object
+          properties:
+            _id: { type: string, example: 65f1a2b3c4d5e6f7a8b9c0d2 }
+            fullName: { type: string, example: Vikram Singh }
+            phone: { type: string, example: "+919876543202" }
+            bloodGroup: { type: string, example: B+ }
+        message:
+          type: string
+          example: I am on my way, currently near the main gate.
+        createdAt:
+          type: string
+          format: date-time
+
+    # ---------------- ERROR RESPONSE SCHEMA ----------------
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Validation Error
+        errors:
+          type: array
+          items:
+            type: string
+          example:
+            - Blood group must be one of: O-, O+, A-, A+, B-, B+, AB-, AB+
+            - Password must be at least 6 characters long
+
+paths:
+  # ---------------- SYSTEM ----------------
+  /health:
+    get:
+      summary: Health check
+      description: Returns server operational status and uptime.
+      tags: [System]
+      responses:
+        200:
+          description: Server is online and healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: healthy }
+                  service: { type: string, example: BloodBridge API }
+                  uptimeSeconds: { type: number, example: 42 }
+                  swaggerDocs: { type: string, example: /api-docs }
+
+  # ---------------- AUTHENTICATION ----------------
+  /api/auth/register:
+    post:
+      summary: Register community user
+      description: Registers a role-less community member with their blood group. No static location required.
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterPayload'
+      responses:
+        201:
+          description: User registered successfully (no token generated at registration; use POST /api/auth/login)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        400:
+          description: Validation error or duplicate phone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      summary: Login user
+      description: Authenticates with phone and password, returning JWT access token.
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginPayload'
+      responses:
+        200:
+          description: Authenticated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        400:
+          description: Missing phone or password
+        401:
+          description: Invalid phone number or password
+
+  /api/auth/me:
+    get:
+      summary: Get current authenticated user profile
+      tags: [Authentication]
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  user: { $ref: '#/components/schemas/UserResponse' }
+        401:
+          description: Missing or invalid token
+
+  /api/auth/me/readiness:
+    patch:
+      summary: Update donor availability, cooldown date, or FCM token
+      tags: [Authentication]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadinessPayload'
+      responses:
+        200:
+          description: Readiness updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  user: { $ref: '#/components/schemas/UserResponse' }
+
+  # ---------------- EMERGENCY REQUESTS ----------------
+  /api/requests:
+    post:
+      summary: Create emergency blood request & broadcast
+      description: Creates a new request with hospital coordinates and immediately triggers targeted broadcasts to compatible donors.
+      tags: [Emergency Requests]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRequestPayload'
+      responses:
+        201:
+          description: Emergency request created and broadcast triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: Emergency broadcast triggered to 14 compatible donors }
+                  request: { $ref: '#/components/schemas/BloodRequestResponse' }
+        400:
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: List active emergency blood requests
+      tags: [Emergency Requests]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [BROADCASTING, RESPONDERS_POOLING, FULFILLED, CANCELLED, EXPIRED]
+          description: Filter requests by status
+        - name: mine
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Set to true to list requests created by the authenticated user
+        - name: compatibleOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Set to true to filter only requests that match the authenticated donor's blood group compatibility (e.g. O- sees all, O+ sees Rh+, etc.)
+      responses:
+        200:
+          description: List of blood requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  count: { type: integer, example: 3 }
+                  requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BloodRequestResponse'
+
+  /api/requests/{id}:
+    get:
+      summary: Get request details and ranked responder pool
+      description: Returns request information, hospital coordinates, and primary/backup responder pool with road ETAs.
+      tags: [Emergency Requests]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: BloodRequest ID
+      responses:
+        200:
+          description: Full request details and ranked responder pool
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  request: { $ref: '#/components/schemas/BloodRequestResponse' }
+                  responderPool:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ResponderItem'
+        404:
+          description: Request not found
+
+  /api/requests/{id}/status:
+    patch:
+      summary: Mark emergency request FULFILLED or CANCELLED
+      description: Only the original requester can mark the request fulfilled or cancelled.
+      tags: [Emergency Requests]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRequestStatusPayload'
+      responses:
+        200:
+          description: Request status updated
+        403:
+          description: Not authorized to update this request
+
+  # ---------------- RESPONDER POOL ----------------
+  /api/requests/{id}/respond:
+    post:
+      summary: Confirm help with one-time current location (No continuous GPS)
+      description: Captures one-time coordinates upon confirmation, queries OSRM for road distance and travel duration, and assigns Primary or Backup slot.
+      tags: [Responder Pool]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RespondPayload'
+      responses:
+        200:
+          description: Confirmed as Primary or Backup donor with road ETA
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: You are confirmed as Primary Donor }
+                  response: { $ref: '#/components/schemas/ResponderItem' }
+        400:
+          description: Invalid coordinates or request closed
+
+  /api/requests/{id}/respond/status:
+    patch:
+      summary: Update responder arrival milestone
+      description: Transitions status: EN_ROUTE -> ARRIVED -> DONATED -> WITHDRAWN. Withdrawing auto-promotes the closest backup responder.
+      tags: [Responder Pool]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateResponderStatusPayload'
+      responses:
+        200:
+          description: Responder milestone status updated successfully
+
+  # ---------------- IN-APP CHAT ----------------
+  /api/requests/{id}/messages:
+    get:
+      summary: Get chat message history
+      description: Returns persisted messages for this emergency request.
+      tags: [In-App Chat]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Chat history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  count: { type: integer, example: 5 }
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatMessageResponse'
+
+    post:
+      summary: Send an in-app emergency message
+      description: Persists message in MongoDB and emits it in real-time to the request Socket.IO room.
+      tags: [In-App Chat]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessagePayload'
+      responses:
+        201:
+          description: Message sent and broadcast to room
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { $ref: '#/components/schemas/ChatMessageResponse' }
