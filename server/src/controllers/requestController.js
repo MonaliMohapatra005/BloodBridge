@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import axios from 'axios';
 import BloodRequest from '../models/BloodRequest.js';
 import RequestResponse from '../models/RequestResponse.js';
@@ -139,6 +140,8 @@ const broadcastEmergencyAlert = async (bloodRequest, io) => {
 };
 
 const getRankedPool = async (requestId) => {
+  if (!mongoose.Types.ObjectId.isValid(requestId)) return [];
+
   return RequestResponse.find({
     requestId,
     status: { $ne: 'WITHDRAWN' },
@@ -155,6 +158,10 @@ const assignResponderToPool = async ({
   distanceMeters,
   etaSeconds,
 }) => {
+  if (!mongoose.Types.ObjectId.isValid(requestId)) {
+    throw new Error('Invalid request ID');
+  }
+
   const request = await BloodRequest.findById(requestId);
   if (!request) {
     throw new Error('Blood request not found');
@@ -198,6 +205,8 @@ const assignResponderToPool = async ({
 };
 
 const handleResponderWithdrawal = async (requestId, io) => {
+  if (!mongoose.Types.ObjectId.isValid(requestId)) return null;
+
   const request = await BloodRequest.findById(requestId);
   if (!request) return null;
 
@@ -351,6 +360,13 @@ export const getBloodRequests = async (req, res) => {
 // @access  Private
 export const getBloodRequestById = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request ID format',
+      });
+    }
+
     const request = await BloodRequest.findById(req.params.id)
       .populate('requesterId', 'fullName phone bloodGroup');
 
@@ -395,6 +411,13 @@ export const getBloodRequestById = async (req, res) => {
 // @access  Private
 export const respondToRequest = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request ID format',
+      });
+    }
+
     const { lat, lng } = req.body;
 
     const request = await BloodRequest.findById(req.params.id);
@@ -477,6 +500,13 @@ export const respondToRequest = async (req, res) => {
 // @access  Private
 export const updateResponderStatus = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request ID format',
+      });
+    }
+
     const { status } = req.body;
 
     const response = await RequestResponse.findOne({
@@ -541,6 +571,13 @@ export const updateResponderStatus = async (req, res) => {
 // @access  Private (Requester only)
 export const updateRequestStatus = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request ID format',
+      });
+    }
+
     const { status } = req.body;
 
     const request = await BloodRequest.findById(req.params.id);

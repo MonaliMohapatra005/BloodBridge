@@ -75,8 +75,10 @@ export const loginSchema = Joi.object({
 });
 
 export const readinessSchema = Joi.object({
+  fullName: Joi.string().trim().min(2).max(80).optional(),
+  email: Joi.string().trim().email().lowercase().allow('', null).optional(),
   isAvailableToDonate: Joi.boolean().optional(),
-  lastDonatedAt: Joi.date().iso().allow(null).optional(),
+  lastDonatedAt: Joi.alternatives().try(Joi.date().iso(), Joi.string().valid('', null), Joi.allow(null)).optional(),
   fcmToken: Joi.string().trim().allow(null, '').optional(),
 });
 

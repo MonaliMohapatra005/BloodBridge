@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import ChatMessage from '../models/ChatMessage.js';
@@ -35,32 +36,36 @@ export const setupSocketHandlers = (io) => {
     socket.join(`user:${userId}`);
 
     // Client explicitly joins personal room (if reconnecting)
-    socket.on('register:user', ({ userId: clientUserId }) => {
-      const targetId = clientUserId || userId;
+    socket.on('register:user', (data = {}) => {
+      const targetId = data?.userId || userId;
       socket.join(`user:${targetId}`);
       console.log(`[Socket] User joined personal room: user:${targetId}`);
     });
 
     // Join an emergency coordination room
-    socket.on('join:request', ({ requestId }) => {
-      if (requestId) {
+    socket.on('join:request', (data = {}) => {
+      const requestId = data?.requestId;
+      if (requestId && requestId !== 'undefined') {
         socket.join(`request:${requestId}`);
         console.log(`[Socket] User ${socket.user.fullName} joined request room: request:${requestId}`);
       }
     });
 
     // Leave an emergency coordination room
-    socket.on('leave:request', ({ requestId }) => {
-      if (requestId) {
+    socket.on('leave:request', (data = {}) => {
+      const requestId = data?.requestId;
+      if (requestId && requestId !== 'undefined') {
         socket.leave(`request:${requestId}`);
         console.log(`[Socket] User ${socket.user.fullName} left request room: request:${requestId}`);
       }
     });
 
     // In-app real-time chat message
-    socket.on('chat:send', async ({ requestId, message }) => {
+    socket.on('chat:send', async (data = {}) => {
       try {
+        const { requestId, message } = data || {};
         if (!requestId || !message || !message.trim()) return;
+        if (!mongoose.Types.ObjectId.isValid(requestId)) return;
 
         const chatRecord = await ChatMessage.create({
           requestId,

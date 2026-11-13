@@ -139,11 +139,13 @@ export const getCurrentUser = async (req, res) => {
 // @access  Private
 export const updateDonorReadiness = async (req, res) => {
   try {
-    const { isAvailableToDonate, lastDonatedAt, fcmToken } = req.body;
+    const { fullName, email, isAvailableToDonate, lastDonatedAt, fcmToken } = req.body;
     const updates = {};
 
+    if (fullName !== undefined) updates.fullName = fullName.trim();
+    if (email !== undefined) updates.email = email ? email.trim().toLowerCase() : null;
     if (isAvailableToDonate !== undefined) updates.isAvailableToDonate = isAvailableToDonate;
-    if (lastDonatedAt !== undefined) updates.lastDonatedAt = lastDonatedAt;
+    if (lastDonatedAt !== undefined) updates.lastDonatedAt = lastDonatedAt === '' ? null : lastDonatedAt;
     if (fcmToken !== undefined) updates.fcmToken = fcmToken;
 
     const user = await User.findByIdAndUpdate(req.user._id, updates, {
