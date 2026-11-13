@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import ChatMessage from '../models/ChatMessage.js';
 import BloodRequest from '../models/BloodRequest.js';
 
@@ -6,6 +7,13 @@ import BloodRequest from '../models/BloodRequest.js';
 // @access  Private
 export const getRequestMessages = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request ID format',
+      });
+    }
+
     const messages = await ChatMessage.find({ requestId: req.params.id })
       .populate('senderId', 'fullName phone bloodGroup')
       .sort({ createdAt: 1 })
@@ -29,6 +37,13 @@ export const getRequestMessages = async (req, res) => {
 // @access  Private
 export const sendRequestMessage = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request ID format',
+      });
+    }
+
     const { message } = req.body;
     if (!message || !message.trim()) {
       return res.status(400).json({
