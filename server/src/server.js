@@ -100,10 +100,12 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`=======================================================`);
   console.log(` BloodBridge Backend Server running on port ${PORT}`);
   console.log(` Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(` Local:       http://localhost:${PORT}`);
+  console.log(` Network:     http://0.0.0.0:${PORT}`);
   console.log(` Swagger UI:  http://localhost:${PORT}/api-docs`);
   console.log(` Health check: http://localhost:${PORT}/health`);
   console.log(`=======================================================`);
